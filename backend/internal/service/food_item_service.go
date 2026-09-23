@@ -43,6 +43,7 @@ type CreateFoodInput struct {
 	Unit            string     `json:"unit"`
 	StorageLocation string     `json:"storage_location"`
 	OpenedAt        *time.Time `json:"opened_at"`
+	OpenedAfterDays *int       `json:"opened_after_days"`
 	ImageURL        string     `json:"image_url"`
 }
 
@@ -54,13 +55,17 @@ func (s *FoodItemService) Create(ctx context.Context, userID uint, input CreateF
 	if !contains(constants.FoodCategories, input.Category) {
 		return nil, util.BadRequest(constants.MsgCategoryInvalid, errors.New("invalid category"))
 	}
+	if input.OpenedAfterDays != nil && !util.ValidOpenedAfterDays(*input.OpenedAfterDays) {
+		return nil, util.BadRequest(constants.MsgOpenedDaysInvalid,
+			fmt.Errorf("opened_after_days %d out of range [%d,%d]", *input.OpenedAfterDays, constants.MinOpenedAfterDays, constants.MaxOpenedAfterDays))
+	}
 	item := &model.FoodItem{
 		FamilyID: input.FamilyID, Name: input.Name, Category: input.Category,
 		ProductionDate: input.ProductionDate, ShelfLifeDays: input.ShelfLifeDays,
 		Quantity: input.Quantity, Unit: input.Unit, StorageLocation: input.StorageLocation,
-		OpenedAt: input.OpenedAt, ImageURL: input.ImageURL, CreatorID: userID,
+		OpenedAt: input.OpenedAt, OpenedAfterDays: input.OpenedAfterDays, ImageURL: input.ImageURL, CreatorID: userID,
 	}
-	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt)
+	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt, item.OpenedAfterDays)
 	item.Status = s.calculator.ComputeFreshness("", item.ExpiryDate)
 	if err := s.repo.Create(item); err != nil {
 		return nil, util.LogError(s.log, ctx, constants.LOG_FOOD_CREATED, fmt.Errorf("create food item: %w", err))
@@ -109,6 +114,11 @@ func (s *FoodItemService) Update(ctx context.Context, userID, id uint, input Cre
 	if err := s.familySvc.IsMember(ctx, item.FamilyID, userID); err != nil {
 		return nil, err
 	}
+	// 开封后食用天数超出 1~30：直接拒绝写入，保留原记录（数量与消耗历史不变），并在 message 中说明原因。
+	if input.OpenedAfterDays != nil && !util.ValidOpenedAfterDays(*input.OpenedAfterDays) {
+		return nil, util.BadRequest(constants.MsgOpenedDaysInvalid,
+			fmt.Errorf("FoodItem[id=%d] opened_after_days %d out of range [%d,%d]", id, *input.OpenedAfterDays, constants.MinOpenedAfterDays, constants.MaxOpenedAfterDays))
+	}
 	if input.Name != "" {
 		item.Name = input.Name
 	}
@@ -133,13 +143,13 @@ func (s *FoodItemService) Update(ctx context.Context, userID, id uint, input Cre
 	if input.StorageLocation != "" {
 		item.StorageLocation = input.StorageLocation
 	}
-	if input.OpenedAt != nil {
-		item.OpenedAt = input.OpenedAt
-	}
+	// 开封信息录入/编辑都可改，传空（null）视为取消开封，到期日回退为原保质期。
+	item.OpenedAt = input.OpenedAt
+	item.OpenedAfterDays = input.OpenedAfterDays
 	if input.ImageURL != "" {
 		item.ImageURL = input.ImageURL
 	}
-	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt)
+	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt, item.OpenedAfterDays)
 	item.Status = s.calculator.ComputeFreshness(item.Status, item.ExpiryDate)
 	if err := s.repo.Update(item); err != nil {
 		return nil, util.LogError(s.log, ctx, constants.LOG_FOOD_UPDATED, fmt.Errorf("update food item: %w", err))
@@ -253,7 +263,7 @@ func (s *FoodItemService) ImportCSV(ctx context.Context, userID, familyID uint, 
 			FamilyID: familyID, Name: name, Category: category, Quantity: quantity,
 			Unit: unit, ShelfLifeDays: days, StorageLocation: location, CreatorID: userID,
 		}
-		item.ExpiryDate = s.calculator.CalculateExpiryDate(nil, days, nil)
+		item.ExpiryDate = s.calculator.CalculateExpiryDate(nil, days, nil, nil)
 		item.Status = s.calculator.ComputeFreshness("", item.ExpiryDate)
 		if err := s.repo.Create(item); err != nil {
 			return 0, nil, util.LogError(s.log, ctx, constants.LOG_FOOD_IMPORTED, fmt.Errorf("import csv food: %w", err))

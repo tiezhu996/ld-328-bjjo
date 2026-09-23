@@ -14,6 +14,7 @@ type FoodItem struct {
 	Unit            string     `gorm:"size:20" json:"unit"`
 	StorageLocation string     `gorm:"size:20" json:"storage_location"`
 	OpenedAt        *time.Time `json:"opened_at"`
+	OpenedAfterDays *int       `json:"opened_after_days"`
 	ExpiryDate      *time.Time `json:"expiry_date"`
 	Status          string     `gorm:"size:20;default:fresh;index" json:"status"`
 	ImageURL        string     `gorm:"size:255" json:"image_url"`

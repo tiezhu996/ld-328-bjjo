@@ -40,6 +40,11 @@ export const FreshnessStatusLabels: Record<string, string> = {
 
 export const ExpiringThresholdDays = 3;
 
+// 开封后食用期限：天数留空时按默认 7 天提醒，乳制品/熟食/冷冻等类别不做区分
+export const DefaultOpenedAfterDays = 7;
+export const MinOpenedAfterDays = 1;
+export const MaxOpenedAfterDays = 30;
+
 export const StorageLocationLabels: Record<string, string> = {
   fridge: '冰箱',
   pantry: '储藏室',

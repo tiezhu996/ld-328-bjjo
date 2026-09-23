@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Upload, message } from 'antd';
+import { Button, Card, Col, DatePicker, Drawer, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Upload, message } from 'antd';
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { useFamilyStore } from '../stores/familyStore';
 import { consumeFood, createFood, deleteFood, getFoodDetail, importFoodsCSV, listFoods, updateFood } from '../api/foodItem';
 import type { ConsumptionRecord, FoodItem } from '../types';
 import FreshnessBadge from '../components/common/FreshnessBadge';
 import RemainingDaysBar from '../components/common/RemainingDaysBar';
-import { FoodCategories, FoodCategoryLabels, StorageLocationLabels } from '../constants/food';
-import { formatDateTime } from '../utils/dateFormat';
+import { DefaultOpenedAfterDays, FoodCategories, FoodCategoryLabels, MaxOpenedAfterDays, MinOpenedAfterDays, StorageLocationLabels } from '../constants/food';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { usePagination } from '../hooks/usePagination';
 import { useFoodStore } from '../stores/foodStore';
 
@@ -34,12 +35,29 @@ export default function FoodManage() {
 
   async function onSave(values: any) {
     if (!currentFamily) return;
-    const payload = { ...values, family_id: currentFamily.id, quantity: values.quantity ?? 1, shelf_life_days: values.shelf_life_days ?? 7 };
-    if (editing) await updateFood(editing.id, payload);
-    else await createFood(payload);
-    message.success('保存成功');
-    setOpen(false);
-    load();
+    // 开封后食用天数：留空仍按 7 天提醒，区间限制 1~30 天（与后端校验保持一致）
+    const openedDays = values.opened_after_days ?? null;
+    if (openedDays !== null && (openedDays < MinOpenedAfterDays || openedDays > MaxOpenedAfterDays)) {
+      message.error(`开封后食用天数只允许 ${MinOpenedAfterDays}~${MaxOpenedAfterDays} 天，已保留原记录未修改`);
+      return;
+    }
+    const payload = {
+      ...values,
+      family_id: currentFamily.id,
+      quantity: values.quantity ?? 1,
+      shelf_life_days: values.shelf_life_days ?? 7,
+      opened_at: values.opened_at ? values.opened_at.toISOString() : null,
+      opened_after_days: openedDays,
+    };
+    try {
+      if (editing) await updateFood(editing.id, payload);
+      else await createFood(payload);
+      message.success('保存成功');
+      setOpen(false);
+      load();
+    } catch {
+      // 越界等业务错误由 request 拦截器统一提示，原记录保持不变
+    }
   }
 
   async function onConsume(item: FoodItem) {
@@ -68,12 +86,21 @@ export default function FoodManage() {
     { title: '类别', dataIndex: 'category', render: (v) => FoodCategoryLabels[v] ?? v },
     { title: '数量', render: (_, r) => `${r.quantity} ${r.unit}` },
     { title: '存放位置', dataIndex: 'storage_location', render: (v) => StorageLocationLabels[v] ?? v },
+    { title: '开封情况', render: (_, r) => (
+      r.opened_at
+        ? `${formatDate(r.opened_at)} 开封，${r.opened_after_days ?? DefaultOpenedAfterDays} 天内食用`
+        : <span style={{ color: '#999' }}>未开封</span>
+    ) },
     { title: '状态', render: (_, r) => <FreshnessBadge status={r.status} expiryDate={r.expiry_date} /> },
     { title: '剩余', render: (_, r) => <RemainingDaysBar expiryDate={r.expiry_date} /> },
     { title: '操作', render: (_, r) => (
       <Space>
         <a onClick={() => getFoodDetail(r.id).then(setDetail)}>详情</a>
-        <a onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>编辑</a>
+        <a onClick={() => {
+          setEditing(r);
+          form.setFieldsValue({ ...r, opened_at: r.opened_at ? dayjs(r.opened_at) : null });
+          setOpen(true);
+        }}>编辑</a>
         <a onClick={() => { setDetail({ item: r, consumption_records: [] }); setConsumeQty(1); }}>消耗</a>
         <a style={{ color: '#ff4d4f' }} onClick={() => Modal.confirm({ title: '确认删除？', onOk: () => onDelete(r) })}>删除</a>
       </Space>
@@ -104,6 +131,12 @@ export default function FoodManage() {
           <Form.Item name="quantity" label="数量" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="unit" label="单位"><Input /></Form.Item>
           <Form.Item name="shelf_life_days" label="保质期（天）"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="opened_at" label="开封时间" tooltip="开封后默认 7 天内食用提醒，牛奶、熟食、冷冻等所有食品统一规则">
+            <DatePicker style={{ width: '100%' }} allowClear placeholder="未开封则留空，按原保质期计算" />
+          </Form.Item>
+          <Form.Item name="opened_after_days" label="开封后食用天数" tooltip={`留空按默认 ${DefaultOpenedAfterDays} 天；允许 ${MinOpenedAfterDays}~${MaxOpenedAfterDays} 天，到期日取原保质期与开封后期限中较早的`}>
+            <InputNumber min={MinOpenedAfterDays} max={MaxOpenedAfterDays} precision={0} style={{ width: '100%' }} placeholder={`留空按 ${DefaultOpenedAfterDays} 天提醒`} />
+          </Form.Item>
           <Form.Item name="storage_location" label="存放位置"><Select options={Object.entries(StorageLocationLabels).map(([value,label]) => ({ value, label }))} /></Form.Item>
           <Button type="primary" htmlType="submit" block>保存</Button>
         </Form>
@@ -116,6 +149,14 @@ export default function FoodManage() {
               <Col span={8}>数量：{detail.item.quantity} {detail.item.unit}</Col>
               <Col span={8}>类别：{FoodCategoryLabels[detail.item.category]}</Col>
               <Col span={8}><FreshnessBadge status={detail.item.status} expiryDate={detail.item.expiry_date} /></Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={8}>到期日：{formatDate(detail.item.expiry_date)}</Col>
+              <Col span={16}>
+                开封：{detail.item.opened_at
+                  ? `${formatDate(detail.item.opened_at)}（开封后 ${detail.item.opened_after_days ?? DefaultOpenedAfterDays} 天内食用）`
+                  : '未开封，按原保质期计算'}
+              </Col>
             </Row>
             <Space>
               <InputNumber min={0.1} value={consumeQty} onChange={(v) => setConsumeQty(v ?? 1)} />

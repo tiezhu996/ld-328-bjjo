@@ -38,6 +38,7 @@ export interface FoodItem {
   unit: string;
   storage_location: string;
   opened_at?: string | null;
+  opened_after_days?: number | null;
   expiry_date?: string | null;
   status: FreshnessStatusValue | string;
   image_url: string;

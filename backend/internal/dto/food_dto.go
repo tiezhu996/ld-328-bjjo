@@ -13,6 +13,7 @@ type CreateFoodRequest struct {
 	Unit            string     `json:"unit"`
 	StorageLocation string     `json:"storage_location"`
 	OpenedAt        *time.Time `json:"opened_at"`
+	OpenedAfterDays *int       `json:"opened_after_days"`
 	ImageURL        string     `json:"image_url"`
 }
 

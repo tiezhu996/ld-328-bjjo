@@ -34,7 +34,7 @@ func (h *FoodItemHandler) Create(c *gin.Context) {
 		FamilyID: req.FamilyID, Name: req.Name, Category: req.Category,
 		ProductionDate: req.ProductionDate, ShelfLifeDays: req.ShelfLifeDays,
 		Quantity: req.Quantity, Unit: req.Unit, StorageLocation: req.StorageLocation,
-		OpenedAt: req.OpenedAt, ImageURL: req.ImageURL,
+		OpenedAt: req.OpenedAt, OpenedAfterDays: req.OpenedAfterDays, ImageURL: req.ImageURL,
 	})
 	if err != nil {
 		c.Error(err)
@@ -85,7 +85,7 @@ func (h *FoodItemHandler) Update(c *gin.Context) {
 		FamilyID: req.FamilyID, Name: req.Name, Category: req.Category,
 		ProductionDate: req.ProductionDate, ShelfLifeDays: req.ShelfLifeDays,
 		Quantity: req.Quantity, Unit: req.Unit, StorageLocation: req.StorageLocation,
-		OpenedAt: req.OpenedAt, ImageURL: req.ImageURL,
+		OpenedAt: req.OpenedAt, OpenedAfterDays: req.OpenedAfterDays, ImageURL: req.ImageURL,
 	})
 	if err != nil {
 		c.Error(err)

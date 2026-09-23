@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS food_items (
     unit VARCHAR(20) DEFAULT '份',
     storage_location VARCHAR(20) DEFAULT 'fridge',
     opened_at TIMESTAMPTZ,
+    opened_after_days INT,
     expiry_date TIMESTAMPTZ,
     status VARCHAR(20) DEFAULT 'fresh',
     image_url VARCHAR(255) DEFAULT '',
@@ -50,6 +51,8 @@ CREATE TABLE IF NOT EXISTS food_items (
     CONSTRAINT fk_food_family FOREIGN KEY (family_id) REFERENCES family_groups(id)
 );
 CREATE INDEX IF NOT EXISTS idx_food_family_status ON food_items(family_id, status);
+-- 兼容已存在的库：补齐开封后食用天数列（留空时按默认 7 天提醒）
+ALTER TABLE food_items ADD COLUMN IF NOT EXISTS opened_after_days INT;
 
 CREATE TABLE IF NOT EXISTS consumption_records (
     id BIGSERIAL PRIMARY KEY,

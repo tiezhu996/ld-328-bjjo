@@ -32,6 +32,14 @@ var FreshnessStatuses = []string{
 // ExpiringThresholdDays 临期阈值（天），与前端 utils/calculateRemainingDays.ts 保持一致。
 const ExpiringThresholdDays = 3
 
+// 开封后食用期限：开封时间为空时不启用开封后期限；填写了开封时间但未填天数时，
+// 乳制品/熟食/冷冻等所有类别一律按默认 7 天提醒（不区分类别）。
+const (
+	DefaultOpenedAfterDays = 7  // 开封后默认食用天数（留空按 7 天）
+	MinOpenedAfterDays     = 1  // 开封后食用天数下限
+	MaxOpenedAfterDays     = 30 // 开封后食用天数上限
+)
+
 // StorageLocations 存放位置枚举。
 const (
 	StorageFridge   = "fridge"   // 冰箱
