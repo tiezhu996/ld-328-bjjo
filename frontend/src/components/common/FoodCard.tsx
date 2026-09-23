@@ -1,6 +1,7 @@
 import { Card, Space, Typography } from 'antd';
 import type { FoodItem } from '../../types';
-import { FoodCategoryLabels, StorageLocationLabels } from '../../constants/food';
+import { DefaultOpenedShelfLifeDays, FoodCategoryLabels, StorageLocationLabels } from '../../constants/food';
+import { formatDate } from '../../utils/dateFormat';
 import FreshnessBadge from './FreshnessBadge';
 import RemainingDaysBar from './RemainingDaysBar';
 
@@ -24,6 +25,11 @@ export default function FoodCard({ item, onClick }: Props) {
         <Text type="secondary">类别：{FoodCategoryLabels[item.category] ?? item.category}</Text>
         <Text type="secondary">数量：{item.quantity} {item.unit}</Text>
         <Text type="secondary">存放：{StorageLocationLabels[item.storage_location] ?? item.storage_location}</Text>
+        <Text type={item.opened_at ? 'warning' : 'secondary'}>
+          {item.opened_at
+            ? `已开封：${formatDate(item.opened_at)}（${item.opened_shelf_life_days ?? DefaultOpenedShelfLifeDays} 天内食用）`
+            : '未开封'}
+        </Text>
         <RemainingDaysBar expiryDate={item.expiry_date} />
       </Space>
     </Card>

@@ -23,6 +23,7 @@ const (
 	MsgFoodConsumeFailed    = "食品（FoodItem）消耗失败：数量超出库存"
 	MsgFoodNotAvailable     = "食品（FoodItem）已消耗或不存在，无法操作"
 	MsgCategoryInvalid      = "食品类别（FoodCategory）不合法"
+	MsgOpenedDaysInvalid    = "开封后食用天数（FoodItem.opened_shelf_life_days）只允许 1~30 天，请保持原值或重新填写"
 	MsgStatusInvalid        = "新鲜度状态（FreshnessStatus）不合法"
 	MsgDuplicatePhone       = "手机号（User.phone）已注册"
 	MsgLoginFailed          = "手机号或密码（User）错误"

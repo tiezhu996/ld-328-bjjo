@@ -112,7 +112,11 @@ func migrateAndSeed(db *gorm.DB, log *slog.Logger) error {
 		return err
 	}
 	if tableCount > 0 {
-		return nil // init.sql 已初始化
+		// init.sql 已初始化：仅做增量补列，兼容新增的「开封后食用天数」字段。
+		if err := db.AutoMigrate(&model.FoodItem{}); err != nil {
+			return err
+		}
+		return nil
 	}
 	if err := db.AutoMigrate(
 		&model.User{}, &model.FamilyGroup{}, &model.FamilyMember{},

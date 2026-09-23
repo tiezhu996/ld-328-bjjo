@@ -23,6 +23,7 @@ const (
 	LOG_FOOD_CONSUME_SUCCESS         = "FoodItem consume success"
 	LOG_FOOD_CONSUME_FAILED          = "FoodItem consume failed"
 	LOG_FOOD_STATUS_REFRESHED        = "FoodItem freshness status refreshed"
+	LOG_FOOD_OPENED_DAYS_INVALID     = "FoodItem opened shelf life days invalid"
 	LOG_CONSUMPTION_RECORDED         = "ConsumptionRecord recorded"
 	LOG_CONSUMPTION_ANALYSIS         = "ConsumptionRecord analysis generated"
 	LOG_NOTIFICATION_CREATED         = "Notification created"

@@ -32,6 +32,14 @@ var FreshnessStatuses = []string{
 // ExpiringThresholdDays 临期阈值（天），与前端 utils/calculateRemainingDays.ts 保持一致。
 const ExpiringThresholdDays = 3
 
+// 开封后食用期限：录入/编辑留空时统一按 7 天提醒；允许填写范围 1~30 天。
+// 与前端 constants/food.ts 的 DefaultOpenedShelfLifeDays / OpenedShelfLifeDaysLimit 保持一致。
+const (
+	DefaultOpenedShelfLifeDays  = 7
+	MinOpenedShelfLifeDays      = 1
+	MaxOpenedShelfLifeDays      = 30
+)
+
 // StorageLocations 存放位置枚举。
 const (
 	StorageFridge   = "fridge"   // 冰箱

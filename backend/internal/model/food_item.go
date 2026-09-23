@@ -14,7 +14,9 @@ type FoodItem struct {
 	Unit            string     `gorm:"size:20" json:"unit"`
 	StorageLocation string     `gorm:"size:20" json:"storage_location"`
 	OpenedAt        *time.Time `json:"opened_at"`
-	ExpiryDate      *time.Time `json:"expiry_date"`
+	// OpenedShelfLifeDays 开封后食用天数；为空（0）时按 constants.DefaultOpenedShelfLifeDays=7 天提醒。
+	OpenedShelfLifeDays *int       `json:"opened_shelf_life_days,omitempty"`
+	ExpiryDate          *time.Time `json:"expiry_date"`
 	Status          string     `gorm:"size:20;default:fresh;index" json:"status"`
 	ImageURL        string     `gorm:"size:255" json:"image_url"`
 	CreatorID       uint       `json:"creator_id"`

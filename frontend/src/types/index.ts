@@ -38,6 +38,8 @@ export interface FoodItem {
   unit: string;
   storage_location: string;
   opened_at?: string | null;
+  // 开封后食用天数；留空（null/undefined）时按默认 7 天提醒，允许 1~30
+  opened_shelf_life_days?: number | null;
   expiry_date?: string | null;
   status: FreshnessStatusValue | string;
   image_url: string;

@@ -13,7 +13,9 @@ type CreateFoodRequest struct {
 	Unit            string     `json:"unit"`
 	StorageLocation string     `json:"storage_location"`
 	OpenedAt        *time.Time `json:"opened_at"`
-	ImageURL        string     `json:"image_url"`
+	// OpenedShelfLifeDays 开封后食用天数；留空（不传或 null）按默认 7 天，允许范围 1~30。
+	OpenedShelfLifeDays *int   `json:"opened_shelf_life_days"`
+	ImageURL            string `json:"image_url"`
 }
 
 // CSVImportRequest CSV 批量导入请求。

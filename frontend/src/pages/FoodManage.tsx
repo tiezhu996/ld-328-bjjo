@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Upload, message } from 'antd';
+import { Button, Card, Col, DatePicker, Drawer, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Upload, message } from 'antd';
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { useFamilyStore } from '../stores/familyStore';
 import { consumeFood, createFood, deleteFood, getFoodDetail, importFoodsCSV, listFoods, updateFood } from '../api/foodItem';
 import type { ConsumptionRecord, FoodItem } from '../types';
 import FreshnessBadge from '../components/common/FreshnessBadge';
 import RemainingDaysBar from '../components/common/RemainingDaysBar';
-import { FoodCategories, FoodCategoryLabels, StorageLocationLabels } from '../constants/food';
-import { formatDateTime } from '../utils/dateFormat';
+import { DefaultOpenedShelfLifeDays, FoodCategories, FoodCategoryLabels, MaxOpenedShelfLifeDays, MinOpenedShelfLifeDays, StorageLocationLabels } from '../constants/food';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { usePagination } from '../hooks/usePagination';
 import { useFoodStore } from '../stores/foodStore';
 
@@ -34,7 +35,17 @@ export default function FoodManage() {
 
   async function onSave(values: any) {
     if (!currentFamily) return;
-    const payload = { ...values, family_id: currentFamily.id, quantity: values.quantity ?? 1, shelf_life_days: values.shelf_life_days ?? 7 };
+    // opened_at 由 DatePicker 产出 dayjs，提交前转成后端可解析的时间；清空时为 null。
+    const openedAt = values.opened_at ? dayjs(values.opened_at).toISOString() : null;
+    const payload = {
+      ...values,
+      family_id: currentFamily.id,
+      quantity: values.quantity ?? 1,
+      shelf_life_days: values.shelf_life_days ?? 7,
+      opened_at: openedAt,
+      // 留空不传字段：后端按默认 7 天计算
+      opened_shelf_life_days: values.opened_shelf_life_days ?? null,
+    };
     if (editing) await updateFood(editing.id, payload);
     else await createFood(payload);
     message.success('保存成功');
@@ -68,12 +79,23 @@ export default function FoodManage() {
     { title: '类别', dataIndex: 'category', render: (v) => FoodCategoryLabels[v] ?? v },
     { title: '数量', render: (_, r) => `${r.quantity} ${r.unit}` },
     { title: '存放位置', dataIndex: 'storage_location', render: (v) => StorageLocationLabels[v] ?? v },
+    { title: '开封', render: (_, r) => r.opened_at
+      ? `${formatDate(r.opened_at)}（${r.opened_shelf_life_days ?? DefaultOpenedShelfLifeDays} 天）`
+      : '未开封' },
     { title: '状态', render: (_, r) => <FreshnessBadge status={r.status} expiryDate={r.expiry_date} /> },
     { title: '剩余', render: (_, r) => <RemainingDaysBar expiryDate={r.expiry_date} /> },
     { title: '操作', render: (_, r) => (
       <Space>
         <a onClick={() => getFoodDetail(r.id).then(setDetail)}>详情</a>
-        <a onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }}>编辑</a>
+        <a onClick={() => {
+          setEditing(r);
+          form.setFieldsValue({
+            ...r,
+            opened_at: r.opened_at ? dayjs(r.opened_at) : null,
+            opened_shelf_life_days: r.opened_shelf_life_days ?? null,
+          });
+          setOpen(true);
+        }}>编辑</a>
         <a onClick={() => { setDetail({ item: r, consumption_records: [] }); setConsumeQty(1); }}>消耗</a>
         <a style={{ color: '#ff4d4f' }} onClick={() => Modal.confirm({ title: '确认删除？', onOk: () => onDelete(r) })}>删除</a>
       </Space>
@@ -105,6 +127,40 @@ export default function FoodManage() {
           <Form.Item name="unit" label="单位"><Input /></Form.Item>
           <Form.Item name="shelf_life_days" label="保质期（天）"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="storage_location" label="存放位置"><Select options={Object.entries(StorageLocationLabels).map(([value,label]) => ({ value, label }))} /></Form.Item>
+          <Form.Item
+            name="opened_at"
+            label="开封时间"
+            extra="选择开封时间后按开封后期限提醒；到期日取原保质期与开封后期限中较早者"
+          >
+            <DatePicker showTime={{ format: 'HH:mm' }} format="YYYY-MM-DD HH:mm" allowClear style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, cur) => prev.opened_at !== cur.opened_at}
+          >
+            {({ getFieldValue }) => (
+              <Form.Item
+                name="opened_shelf_life_days"
+                label="开封后食用天数"
+                extra={`留空默认 ${DefaultOpenedShelfLifeDays} 天，允许 ${MinOpenedShelfLifeDays}~${MaxOpenedShelfLifeDays} 天`}
+                rules={[{
+                  type: 'integer',
+                  min: MinOpenedShelfLifeDays,
+                  max: MaxOpenedShelfLifeDays,
+                  message: `开封后食用天数只能为 ${MinOpenedShelfLifeDays}~${MaxOpenedShelfLifeDays} 天，已保留原记录`,
+                }]}
+              >
+                <InputNumber
+                  min={MinOpenedShelfLifeDays}
+                  max={MaxOpenedShelfLifeDays}
+                  precision={0}
+                  style={{ width: '100%' }}
+                  placeholder={`留空按 ${DefaultOpenedShelfLifeDays} 天`}
+                  disabled={!getFieldValue('opened_at')}
+                />
+              </Form.Item>
+            )}
+          </Form.Item>
           <Button type="primary" htmlType="submit" block>保存</Button>
         </Form>
       </Drawer>
@@ -116,6 +172,17 @@ export default function FoodManage() {
               <Col span={8}>数量：{detail.item.quantity} {detail.item.unit}</Col>
               <Col span={8}>类别：{FoodCategoryLabels[detail.item.category]}</Col>
               <Col span={8}><FreshnessBadge status={detail.item.status} expiryDate={detail.item.expiry_date} /></Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={8}>
+                开封时间：{detail.item.opened_at ? formatDateTime(detail.item.opened_at) : '未开封'}
+              </Col>
+              <Col span={8}>
+                开封后食用：{detail.item.opened_at
+                  ? `${detail.item.opened_shelf_life_days ?? DefaultOpenedShelfLifeDays} 天`
+                  : '-'}
+              </Col>
+              <Col span={8}>到期日：{formatDate(detail.item.expiry_date)}</Col>
             </Row>
             <Space>
               <InputNumber min={0.1} value={consumeQty} onChange={(v) => setConsumeQty(v ?? 1)} />

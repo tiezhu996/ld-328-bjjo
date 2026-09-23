@@ -34,16 +34,31 @@ func NewFoodItemService(repo *repository.FoodItemRepository, consumeRepo *reposi
 
 // CreateFoodInput 创建食品入参。
 type CreateFoodInput struct {
-	FamilyID        uint       `json:"family_id" binding:"required"`
-	Name            string     `json:"name" binding:"required,max=100"`
-	Category        string     `json:"category" binding:"required"`
-	ProductionDate  *time.Time `json:"production_date"`
-	ShelfLifeDays   int        `json:"shelf_life_days"`
-	Quantity        float64    `json:"quantity" binding:"gte=0"`
-	Unit            string     `json:"unit"`
-	StorageLocation string     `json:"storage_location"`
-	OpenedAt        *time.Time `json:"opened_at"`
-	ImageURL        string     `json:"image_url"`
+	FamilyID            uint       `json:"family_id" binding:"required"`
+	Name                string     `json:"name" binding:"required,max=100"`
+	Category            string     `json:"category" binding:"required"`
+	ProductionDate      *time.Time `json:"production_date"`
+	ShelfLifeDays       int        `json:"shelf_life_days"`
+	Quantity            float64    `json:"quantity" binding:"gte=0"`
+	Unit                string     `json:"unit"`
+	StorageLocation     string     `json:"storage_location"`
+	OpenedAt            *time.Time `json:"opened_at"`
+	OpenedShelfLifeDays *int       `json:"opened_shelf_life_days"`
+	ImageURL            string     `json:"image_url"`
+}
+
+// validateOpenedShelfLifeDays 校验开封后食用天数：留空默认 7 天；填写则必须在 1~30 之间。
+// 越界时返回业务错误（保留原记录，由上层透传说明原因），不写入任何字段。
+func (s *FoodItemService) validateOpenedShelfLifeDays(days *int) error {
+	if days == nil {
+		return nil
+	}
+	if *days < constants.MinOpenedShelfLifeDays || *days > constants.MaxOpenedShelfLifeDays {
+		return util.NewAppError(constants.CodeOpenedDaysInvalid, 400, constants.MsgOpenedDaysInvalid,
+			fmt.Errorf("opened_shelf_life_days=%d out of range [%d,%d]",
+				*days, constants.MinOpenedShelfLifeDays, constants.MaxOpenedShelfLifeDays))
+	}
+	return nil
 }
 
 // Create 录入食品并计算到期日与状态。
@@ -54,13 +69,19 @@ func (s *FoodItemService) Create(ctx context.Context, userID uint, input CreateF
 	if !contains(constants.FoodCategories, input.Category) {
 		return nil, util.BadRequest(constants.MsgCategoryInvalid, errors.New("invalid category"))
 	}
+	if err := s.validateOpenedShelfLifeDays(input.OpenedShelfLifeDays); err != nil {
+		// 保留（不创建）记录并说明原因：开封后食用天数仅允许 1~30 天。
+		s.log.WarnContext(ctx, constants.LOG_FOOD_OPENED_DAYS_INVALID, "name", input.Name, "opened_shelf_life_days", input.OpenedShelfLifeDays)
+		return nil, err
+	}
 	item := &model.FoodItem{
 		FamilyID: input.FamilyID, Name: input.Name, Category: input.Category,
 		ProductionDate: input.ProductionDate, ShelfLifeDays: input.ShelfLifeDays,
 		Quantity: input.Quantity, Unit: input.Unit, StorageLocation: input.StorageLocation,
-		OpenedAt: input.OpenedAt, ImageURL: input.ImageURL, CreatorID: userID,
+		OpenedAt: input.OpenedAt, OpenedShelfLifeDays: input.OpenedShelfLifeDays,
+		ImageURL: input.ImageURL, CreatorID: userID,
 	}
-	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt)
+	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt, item.OpenedShelfLifeDays)
 	item.Status = s.calculator.ComputeFreshness("", item.ExpiryDate)
 	if err := s.repo.Create(item); err != nil {
 		return nil, util.LogError(s.log, ctx, constants.LOG_FOOD_CREATED, fmt.Errorf("create food item: %w", err))
@@ -109,6 +130,11 @@ func (s *FoodItemService) Update(ctx context.Context, userID, id uint, input Cre
 	if err := s.familySvc.IsMember(ctx, item.FamilyID, userID); err != nil {
 		return nil, err
 	}
+	// 开封后食用天数越界时直接返回，保留原记录不动（含数量与历史消耗）。
+	if err := s.validateOpenedShelfLifeDays(input.OpenedShelfLifeDays); err != nil {
+		s.log.WarnContext(ctx, constants.LOG_FOOD_OPENED_DAYS_INVALID, "food_id", id, "opened_shelf_life_days", input.OpenedShelfLifeDays)
+		return nil, err
+	}
 	if input.Name != "" {
 		item.Name = input.Name
 	}
@@ -133,13 +159,13 @@ func (s *FoodItemService) Update(ctx context.Context, userID, id uint, input Cre
 	if input.StorageLocation != "" {
 		item.StorageLocation = input.StorageLocation
 	}
-	if input.OpenedAt != nil {
-		item.OpenedAt = input.OpenedAt
-	}
+	// 编辑表单整体提交开封信息：开封时间清空（nil）则恢复未开封，天数 nil 时后续按默认 7 天计算。
+	item.OpenedAt = input.OpenedAt
+	item.OpenedShelfLifeDays = input.OpenedShelfLifeDays
 	if input.ImageURL != "" {
 		item.ImageURL = input.ImageURL
 	}
-	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt)
+	item.ExpiryDate = s.calculator.CalculateExpiryDate(item.ProductionDate, item.ShelfLifeDays, item.OpenedAt, item.OpenedShelfLifeDays)
 	item.Status = s.calculator.ComputeFreshness(item.Status, item.ExpiryDate)
 	if err := s.repo.Update(item); err != nil {
 		return nil, util.LogError(s.log, ctx, constants.LOG_FOOD_UPDATED, fmt.Errorf("update food item: %w", err))
@@ -253,7 +279,7 @@ func (s *FoodItemService) ImportCSV(ctx context.Context, userID, familyID uint, 
 			FamilyID: familyID, Name: name, Category: category, Quantity: quantity,
 			Unit: unit, ShelfLifeDays: days, StorageLocation: location, CreatorID: userID,
 		}
-		item.ExpiryDate = s.calculator.CalculateExpiryDate(nil, days, nil)
+		item.ExpiryDate = s.calculator.CalculateExpiryDate(nil, days, nil, nil)
 		item.Status = s.calculator.ComputeFreshness("", item.ExpiryDate)
 		if err := s.repo.Create(item); err != nil {
 			return 0, nil, util.LogError(s.log, ctx, constants.LOG_FOOD_IMPORTED, fmt.Errorf("import csv food: %w", err))

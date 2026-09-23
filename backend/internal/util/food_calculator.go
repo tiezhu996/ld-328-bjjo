@@ -12,23 +12,34 @@ type FoodCalculator struct{}
 // NewFoodCalculator 构造计算器。
 func NewFoodCalculator() *FoodCalculator { return &FoodCalculator{} }
 
-// CalculateExpiryDate 根据生产日期与保质期天数计算到期日（已开封则按开封时间折算）。
-func (c *FoodCalculator) CalculateExpiryDate(productionDate *time.Time, shelfLifeDays int, openedAt *time.Time) *time.Time {
-	if shelfLifeDays <= 0 {
-		return nil
+// EffectiveOpenedShelfLifeDays 返回生效的开封后食用天数：未填写（nil 或 0）按默认 7 天。
+func EffectiveOpenedShelfLifeDays(days *int) int {
+	if days == nil || *days <= 0 {
+		return constants.DefaultOpenedShelfLifeDays
 	}
-	base := time.Now()
-	if productionDate != nil {
-		base = *productionDate
+	return *days
+}
+
+// CalculateExpiryDate 计算到期日：
+// 未开封时按生产日期+保质期；已开封时取「原保质期到期日」与「开封时间+开封后食用天数」中较早者。
+// openedShelfLifeDays 为空时按默认 7 天；开封时间为空时只按原保质期计算。
+func (c *FoodCalculator) CalculateExpiryDate(productionDate *time.Time, shelfLifeDays int, openedAt *time.Time, openedShelfLifeDays *int) *time.Time {
+	var expiry *time.Time
+	if shelfLifeDays > 0 {
+		base := time.Now()
+		if productionDate != nil {
+			base = *productionDate
+		}
+		e := base.AddDate(0, 0, shelfLifeDays)
+		expiry = &e
 	}
-	expiry := base.AddDate(0, 0, shelfLifeDays)
 	if openedAt != nil {
-		opened := openedAt.AddDate(0, 0, 7) // 开封后建议 7 天内食用
-		if opened.Before(expiry) {
-			expiry = opened
+		opened := openedAt.AddDate(0, 0, EffectiveOpenedShelfLifeDays(openedShelfLifeDays))
+		if expiry == nil || opened.Before(*expiry) {
+			expiry = &opened
 		}
 	}
-	return &expiry
+	return expiry
 }
 
 // RemainingDays 计算剩余自然日（今天到期=0，明天=1，昨天=-1）。

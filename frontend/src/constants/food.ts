@@ -40,6 +40,11 @@ export const FreshnessStatusLabels: Record<string, string> = {
 
 export const ExpiringThresholdDays = 3;
 
+// 开封后食用期限：留空默认按 7 天提醒，表单允许填写 1~30 天（与后端 constants/food.go 一致）
+export const DefaultOpenedShelfLifeDays = 7;
+export const MinOpenedShelfLifeDays = 1;
+export const MaxOpenedShelfLifeDays = 30;
+
 export const StorageLocationLabels: Record<string, string> = {
   fridge: '冰箱',
   pantry: '储藏室',

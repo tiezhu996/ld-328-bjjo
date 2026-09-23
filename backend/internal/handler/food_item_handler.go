@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -34,10 +35,10 @@ func (h *FoodItemHandler) Create(c *gin.Context) {
 		FamilyID: req.FamilyID, Name: req.Name, Category: req.Category,
 		ProductionDate: req.ProductionDate, ShelfLifeDays: req.ShelfLifeDays,
 		Quantity: req.Quantity, Unit: req.Unit, StorageLocation: req.StorageLocation,
-		OpenedAt: req.OpenedAt, ImageURL: req.ImageURL,
+		OpenedAt: req.OpenedAt, OpenedShelfLifeDays: req.OpenedShelfLifeDays, ImageURL: req.ImageURL,
 	})
 	if err != nil {
-		c.Error(err)
+		c.Error(fmt.Errorf("FoodItem create failed: %w", err))
 		return
 	}
 	util.Created(c, item)
@@ -85,10 +86,10 @@ func (h *FoodItemHandler) Update(c *gin.Context) {
 		FamilyID: req.FamilyID, Name: req.Name, Category: req.Category,
 		ProductionDate: req.ProductionDate, ShelfLifeDays: req.ShelfLifeDays,
 		Quantity: req.Quantity, Unit: req.Unit, StorageLocation: req.StorageLocation,
-		OpenedAt: req.OpenedAt, ImageURL: req.ImageURL,
+		OpenedAt: req.OpenedAt, OpenedShelfLifeDays: req.OpenedShelfLifeDays, ImageURL: req.ImageURL,
 	})
 	if err != nil {
-		c.Error(err)
+		c.Error(fmt.Errorf("FoodItem[id=%d] update failed: %w", id, err))
 		return
 	}
 	util.OK(c, item)
